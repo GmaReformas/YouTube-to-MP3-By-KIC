@@ -24,7 +24,7 @@ jobs:
             libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
             zlib1g-dev libgstreamer1.0 gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake \
+            zlib1g-dev libncurses-dev libtinfo-dev cmake \
             libffi-dev libssl-dev openjdk-17-jdk
           pip3 install --upgrade pip
           pip3 install buildozer cython==0.29.37
