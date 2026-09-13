@@ -47,5 +47,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: YouTube-to-MP3-By-KIC
-          path: output/*.apk
+          path: bin/*.apk
           if-no-files-found: error
