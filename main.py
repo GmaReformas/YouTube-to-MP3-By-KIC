@@ -1,4 +1,4 @@
-import os, re, locale, threading
+import os, re, locale, threading, traceback
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
@@ -13,17 +13,36 @@ from kivy.utils import platform
 if platform != 'android':
     Window.size = (400, 700)
 
+if platform == 'android':
+    try:
+        from android.permissions import request_permissions, Permission
+        request_permissions([
+            Permission.WRITE_EXTERNAL_STORAGE,
+            Permission.READ_EXTERNAL_STORAGE,
+            Permission.INTERNET,
+        ])
+    except:
+        pass
+
+    try:
+        from android.storage import primary_external_storage_path
+        SD_CARD = primary_external_storage_path()
+    except:
+        SD_CARD = '/storage/emulated/0'
+
 def get_lang():
     try:
         if platform == 'android':
             from jnius import autoclass
-            lang = autoclass('java.util.Locale').getDefault().getLanguage()
+            locale_class = autoclass('java.util.Locale')
+            lang = locale_class.getDefault().getLanguage()
             if lang.startswith('es'): return 'es'
             if lang.startswith('ro'): return 'ro'
         else:
-            loc = locale.getdefaultlocale()[0]
-            if loc and loc.startswith('es'): return 'es'
-            if loc and loc.startswith('ro'): return 'ro'
+            loc = locale.getdefaultlocale()
+            if loc and loc[0]:
+                if loc[0].startswith('es'): return 'es'
+                if loc[0].startswith('ro'): return 'ro'
     except:
         pass
     return 'en'
@@ -103,11 +122,7 @@ class YtMp3App(App):
         self.downloading = False
         self.queue = []
 
-        if platform == 'android':
-            self.download_dir = '/storage/emulated/0/Download/MP3'
-        else:
-            self.download_dir = str(os.path.expanduser('~/Downloads/MP3'))
-        os.makedirs(self.download_dir, exist_ok=True)
+        self.download_dir = self._get_download_dir()
 
         root = BoxLayout(orientation='vertical', padding=12, spacing=8)
 
@@ -222,6 +237,48 @@ class YtMp3App(App):
 
         return root
 
+    def _get_download_dir(self):
+        dirs_to_try = []
+        if platform == 'android':
+            try:
+                from android.storage import primary_external_storage_path
+                sd = primary_external_storage_path()
+                dirs_to_try.append(os.path.join(sd, 'Download', 'MP3'))
+            except:
+                pass
+            dirs_to_try.append('/storage/emulated/0/Download/MP3')
+            try:
+                from jnius import autoclass
+                ctx = autoclass('org.kivy.android.PythonActivity').mActivity
+                ext = ctx.getExternalFilesDir(None)
+                if ext:
+                    dirs_to_try.append(os.path.join(str(ext), 'MP3'))
+            except:
+                pass
+            dirs_to_try.append('/sdcard/Download/MP3')
+        else:
+            dirs_to_try.append(str(os.path.expanduser('~/Downloads/MP3')))
+
+        for d in dirs_to_try:
+            try:
+                os.makedirs(d, exist_ok=True)
+                test_file = os.path.join(d, '.test_write')
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                os.remove(test_file)
+                return d
+            except:
+                continue
+
+        if platform == 'android':
+            try:
+                from jnius import autoclass
+                ctx = autoclass('org.kivy.android.PythonActivity').mActivity
+                return str(ctx.getFilesDir())
+            except:
+                pass
+        return os.getcwd()
+
     def add_urls(self, *args):
         text = self.url_input.text.strip()
         if not text:
@@ -277,7 +334,11 @@ class YtMp3App(App):
         threading.Thread(target=self._download_all, daemon=True).start()
 
     def _download_all(self):
-        import yt_dlp
+        try:
+            import yt_dlp
+        except Exception:
+            Clock.schedule_once(lambda dt: self._finish(0, len(self.queue)), 0)
+            return
 
         pending = [q for q in self.queue if q['status'] == 'pending']
         total = len(pending)
@@ -287,11 +348,13 @@ class YtMp3App(App):
         for i, item in enumerate(pending):
             item['status'] = 'downloading'
             Clock.schedule_once(lambda dt, t=i: self._set_status(
-                self.t["downloading"].format(n=t+1, total=total)), 0)
+                self.t["downloading"]), 0)
 
             def hook(d, idx=i):
                 if d['status'] == 'downloading':
-                    pct = float(re.search(r'([\d.]+)', d.get('_percent_str', '0')).group(1))
+                    pct_str = d.get('_percent_str', '0')
+                    match = re.search(r'([\d.]+)', pct_str)
+                    pct = float(match.group(1)) if match else 0
                     overall = (idx * 100 + pct) / total
                     Clock.schedule_once(lambda dt, v=overall: self._set_progress(v), 0)
                 elif d['status'] == 'finished':
@@ -309,7 +372,12 @@ class YtMp3App(App):
             }
 
             if platform == 'android':
-                opts['ffmpeg_location'] = '/data/data/org.kivy.python/files'
+                for p in [os.environ.get('ANDROID_PRIVATE', ''),
+                          '/data/data/com.kic.youtubetomp3/files',
+                          '/data/data/com.kic.youtubetomp3']:
+                    if p and os.path.exists(os.path.join(p, 'ffmpeg')):
+                        opts['ffmpeg_location'] = p
+                        break
 
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
