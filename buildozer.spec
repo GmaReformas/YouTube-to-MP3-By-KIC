@@ -6,7 +6,7 @@ package.domain = com.kic
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
-requirements = python3,kivy,yt-dlp,requests==2.32.3,charset-normalizer==2.1.1,idna,urllib3,certifi
+requirements = python3,kivy,yt-dlp
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE

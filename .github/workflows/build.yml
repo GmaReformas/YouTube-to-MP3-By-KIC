@@ -33,8 +33,15 @@ jobs:
       - name: Install buildozer
         run: pip3 install buildozer
 
+      - name: Clean buildozer cache
+        run: rm -rf .buildozer
+
       - name: Build APK
-        run: buildozer -v android debug
+        env:
+          PIP_CONSTRAINT: /tmp/pip-constraints.txt
+        run: |
+          echo "charset-normalizer==2.1.1" > /tmp/pip-constraints.txt
+          buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
