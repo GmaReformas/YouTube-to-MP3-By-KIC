@@ -16,7 +16,5 @@ android.ndk = 25b
 android.sdk = 33
 android.accept_sdk_license = True
 android.archs = arm64-v8a
-presplash.filename = %(source.dir)s/logo.png
-icon.filename = %(source.dir)s/logo.png
 log_level = 2
 warn_on_root = 0
