@@ -1,234 +1,99 @@
-import os, re, threading
+import os
+import re
+import threading
+
 from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
-from kivy.uix.progressbar import ProgressBar
+from kivy.uix.textinput import TextInput
+from kivy.uix.boxlayout import BoxLayout
 from kivy.clock import Clock
 
-try:
-    from kivy.core.window import Window
-    Window.clearcolor = (0.06, 0.06, 0.06, 1)
-except Exception:
-    pass
-
-T = {
-    "title": "YT to MP3 By KIC",
-    "sub": "Paste links and download MP3",
-    "ph": "Paste YouTube links here...",
-    "add": "+ Add",
-    "clear": "Clear",
-    "dl": "Download all",
-    "ready": "Ready to download",
-    "cnt": "Queue: {n} | Pending: {p}",
-    "doing": "Downloading...",
-    "conv": "Converting...",
-    "done": "Completed: {ok} OK, {err} errors",
-    "dedi": "PARA LUCIAN (SERPU)",
-}
-
-TXT = '#e6e6e6'
-SUB = '#a0a0a0'
-RED = '#ef5350'
-GRN = '#66bb6a'
-BLU = '#4fc3f7'
-YLW = '#fdd835'
-NEO = '#00d4ff'
-SURF = '#1a1a2e'
-
-
-def rgba(h):
-    h = h.lstrip('#')
-    return (int(h[0:2], 16) / 255.0,
-            int(h[2:4], 16) / 255.0,
-            int(h[4:6], 16) / 255.0, 1)
+BG = [0.06, 0.06, 0.06, 1]
+TXT = [0.9, 0.9, 0.9, 1]
+BLU = [0.31, 0.76, 0.97, 1]
+GRN = [0.4, 0.73, 0.42, 1]
+RED = [0.94, 0.33, 0.31, 1]
 
 
 class YtMp3App(App):
     def build(self):
-        self.title = T["title"]
-        self.downloading = False
         self.queue = []
-        self.dl_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+        self.downloading = False
 
-        r = BoxLayout(orientation='vertical', padding=12, spacing=8)
+        r = BoxLayout(orientation='vertical', padding=10, spacing=6)
 
-        r.add_widget(Label(text=T["title"], font_size='20sp',
-                           bold=True, color=rgba(RED),
-                           size_hint_y=None, height=40))
-        r.add_widget(Label(text=T["sub"], font_size='12sp',
-                           color=rgba(SUB), size_hint_y=None, height=24))
+        r.add_widget(Label(text='YT to MP3 By KIC',
+                           font_size='22sp', color=TXT,
+                           size_hint_y=None, height=50))
 
-        self.inp = TextInput(
-            hint_text=T["ph"], multiline=True,
-            size_hint_y=None, height=100,
-            background_color=rgba(SURF), foreground_color=rgba(TXT),
-            hint_foreground_color=rgba(SUB), cursor_color=rgba(BLU),
-            font_size='13sp', padding=[8, 8])
+        self.inp = TextInput(hint_text='Paste YouTube links...',
+                             multiline=True, font_size='13sp',
+                             size_hint_y=None, height=100,
+                             foreground_color=TXT,
+                             cursor_color=BLU,
+                             background_color=[0.1, 0.1, 0.15, 1])
         r.add_widget(self.inp)
 
-        br = BoxLayout(spacing=8, size_hint_y=None, height=44)
-        self.b_add = Button(text=T["add"], background_color=rgba(BLU),
-                            color=(0, 0, 0, 1), bold=True, font_size='13sp')
-        self.b_add.bind(on_press=self._add)
-        br.add_widget(self.b_add)
-        self.b_clr = Button(text=T["clear"], background_color=rgba(RED),
-                            color=(0, 0, 0, 1), bold=True, font_size='13sp')
-        self.b_clr.bind(on_press=self._clr)
-        br.add_widget(self.b_clr)
+        br = BoxLayout(size_hint_y=None, height=50, spacing=8)
+        b1 = Button(text='Add', background_color=BLU,
+                    color=[0, 0, 0, 1], font_size='13sp')
+        b1.bind(on_press=self._add)
+        br.add_widget(b1)
+        b2 = Button(text='Download', background_color=GRN,
+                    color=[0, 0, 0, 1], font_size='13sp')
+        b2.bind(on_press=self._go)
+        br.add_widget(b2)
         r.add_widget(br)
 
-        sv = ScrollView()
-        self.qbox = BoxLayout(orientation='vertical', spacing=4,
-                              size_hint_y=None)
-        self.qbox.bind(minimum_height=self.qbox.setter('height'))
-        sv.add_widget(self.qbox)
-        r.add_widget(sv)
-
-        self.cnt = Label(text=T["cnt"].format(n=0, p=0),
-                         font_size='11sp', color=rgba(SUB),
-                         size_hint_y=None, height=22)
-        r.add_widget(self.cnt)
-
-        self.prog = ProgressBar(max=100, value=0,
-                                size_hint_y=None, height=16)
-        r.add_widget(self.prog)
-
-        self.stat = Label(text=T["ready"], font_size='12sp',
-                          color=rgba(SUB), size_hint_y=None, height=24)
+        self.stat = Label(text='Ready', font_size='14sp',
+                          color=TXT, size_hint_y=None, height=40)
         r.add_widget(self.stat)
 
-        dr = BoxLayout(spacing=8, size_hint_y=None, height=44)
-        self.b_dl = Button(text=T["dl"], background_color=rgba(GRN),
-                           color=(0, 0, 0, 1), bold=True, font_size='13sp')
-        self.b_dl.bind(on_press=self._go)
-        dr.add_widget(self.b_dl)
-        r.add_widget(dr)
-
-        r.add_widget(Label(text=T["dedi"], font_size='13sp',
-                           bold=True, color=rgba(NEO),
-                           size_hint_y=None, height=28))
         return r
 
-    def _add(self, *args):
-        text = self.inp.text.strip()
-        if not text:
-            return
-        urls = [l.strip() for l in text.split('\n')
-                if re.search(r'(youtube\.com|youtu\.be)', l.strip())]
-        if not urls:
-            self.stat.text = "No valid YouTube links"
-            self.stat.color = rgba(RED)
-            return
-        for u in urls:
-            self.queue.append({'url': u, 'st': 'pending'})
-            self.qbox.add_widget(Label(
-                text=u[:60] + ('...' if len(u) > 60 else ''),
-                font_size='11sp', color=rgba(TXT),
-                size_hint_y=None, height=30))
-        self.inp.text = ''
-        self._upd()
+    def _add(self, *a):
+        t = self.inp.text.strip()
+        if t:
+            self.queue.append(t)
+            self.stat.text = 'Added: ' + t[:50]
+            self.inp.text = ''
 
-    def _clr(self, *args):
-        if self.downloading:
+    def _go(self, *a):
+        if not self.queue:
+            self.stat.text = 'No links'
             return
-        self.queue.clear()
-        self.qbox.clear_widgets()
-        self._upd()
-
-    def _upd(self):
-        n = len(self.queue)
-        p = sum(1 for q in self.queue if q['st'] == 'pending')
-        self.cnt.text = T["cnt"].format(n=n, p=p)
-
-    def _go(self, *args):
-        if self.downloading or not any(
-                q['st'] == 'pending' for q in self.queue):
-            return
-        self.downloading = True
-        self.b_dl.disabled = True
-        self.b_add.disabled = True
-        self.b_clr.disabled = True
-        self.prog.value = 0
+        self.stat.text = 'Downloading...'
         threading.Thread(target=self._dl, daemon=True).start()
 
     def _dl(self):
+        url = self.queue.pop(0)
         try:
             import yt_dlp
-        except Exception:
-            Clock.schedule_once(lambda dt: self._end(0, len(self.queue)), 0)
-            return
-
-        pending = [q for q in self.queue if q['st'] == 'pending']
-        total = len(pending)
-        ok = err = 0
-
-        for i, item in enumerate(pending):
-            item['st'] = 'doing'
-            Clock.schedule_once(
-                lambda dt: self._sts(T["doing"]), 0)
-
-            def hook(d, idx=i):
-                if d['status'] == 'downloading':
-                    m = re.search(r'([\d.]+)',
-                                  d.get('_percent_str', '0'))
-                    pct = float(m.group(1)) if m else 0
-                    Clock.schedule_once(
-                        lambda dt, v=(idx * 100 + pct) / total:
-                            self._prg(v), 0)
-                elif d['status'] == 'finished':
-                    Clock.schedule_once(
-                        lambda dt: self._sts(T["conv"]), 0)
-
             opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': os.path.join(
-                    self.dl_dir, '%(title)s.%(ext)s'),
-                'progress_hooks': [hook],
+                    os.path.expanduser('~'), 'Downloads',
+                    '%(title)s.%(ext)s'),
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '0'}],
                 'quiet': True,
-                'no_warnings': True,
             }
-
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(
-                        item['url'], download=False)
-                    item['title'] = info.get('title', '?')
-                    ydl.download([item['url']])
-                item['st'] = 'ok'
-                ok += 1
-            except Exception:
-                item['st'] = 'error'
-                err += 1
-
-            pct = (i + 1) / total * 100
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
             Clock.schedule_once(
-                lambda dt, v=pct: self._prg(v), 0)
+                lambda dt: self._ok(), 0)
+        except Exception as e:
+            Clock.schedule_once(
+                lambda dt, err=str(e): self._fail(err), 0)
 
-        Clock.schedule_once(lambda dt: self._end(ok, err), 0)
+    def _ok(self):
+        self.stat.text = 'Downloaded!'
 
-    def _prg(self, v):
-        self.prog.value = v
-
-    def _sts(self, t):
-        self.stat.text = t
-        self.stat.color = rgba(YLW)
-
-    def _end(self, ok, err):
-        self.downloading = False
-        self.b_dl.disabled = False
-        self.b_add.disabled = False
-        self.b_clr.disabled = False
-        self.prog.value = 100
-        self.stat.text = T["done"].format(ok=ok, err=err)
-        self.stat.color = rgba(GRN)
-        self._upd()
+    def _fail(self, e):
+        self.stat.text = 'Error: ' + e[:60]
 
 
 if __name__ == '__main__':
