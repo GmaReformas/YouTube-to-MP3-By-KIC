@@ -1,4 +1,4 @@
-import os, re, locale, threading
+import os, re, threading
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
@@ -7,71 +7,26 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.progressbar import ProgressBar
 from kivy.clock import Clock
-from kivy.core.window import Window
-from kivy.utils import platform
 
-IS_ANDROID = (platform == 'android')
-
-Window.clearcolor = (0.06, 0.06, 0.06, 1)
-
-
-def get_lang():
-    try:
-        if IS_ANDROID:
-            from jnius import autoclass
-            loc = autoclass('java.util.Locale').getDefault().getLanguage()
-            if loc.startswith('es'):
-                return 'es'
-            if loc.startswith('ro'):
-                return 'ro'
-    except Exception:
-        pass
-    return 'en'
-
+try:
+    from kivy.core.window import Window
+    Window.clearcolor = (0.06, 0.06, 0.06, 1)
+except Exception:
+    pass
 
 T = {
-    "es": {
-        "title": "YT to MP3 By KIC",
-        "sub": "Pega enlaces y descarga MP3",
-        "ph": "Pega enlaces de YouTube...",
-        "add": "+ Agregar",
-        "clear": "Limpiar",
-        "dl": "Descargar",
-        "ready": "Listo",
-        "cnt": "Cola: {n} | Pendientes: {p}",
-        "doing": "Descargando...",
-        "conv": "Convirtiendo...",
-        "done": "OK: {ok} | Errores: {err}",
-        "dedi": "PARA LUCIAN (SERPU)",
-    },
-    "ro": {
-        "title": "YT to MP3 By KIC",
-        "sub": "Lipeste linkurile si descarca MP3",
-        "ph": "Lipeste linkurile YouTube...",
-        "add": "+ Adauga",
-        "clear": "Goleste",
-        "dl": "Descarca",
-        "ready": "Gata",
-        "cnt": "Coada: {n} | In asteptare: {p}",
-        "doing": "Se descarca...",
-        "conv": "Se converteste...",
-        "done": "OK: {ok} | Erori: {err}",
-        "dedi": "PARA LUCIAN (SERPU)",
-    },
-    "en": {
-        "title": "YT to MP3 By KIC",
-        "sub": "Paste links and download MP3",
-        "ph": "Paste YouTube links...",
-        "add": "+ Add",
-        "clear": "Clear",
-        "dl": "Download",
-        "ready": "Ready",
-        "cnt": "Queue: {n} | Pending: {p}",
-        "doing": "Downloading...",
-        "conv": "Converting...",
-        "done": "OK: {ok} | Errors: {err}",
-        "dedi": "PARA LUCIAN (SERPU)",
-    },
+    "title": "YT to MP3 By KIC",
+    "sub": "Paste links and download MP3",
+    "ph": "Paste YouTube links here...",
+    "add": "+ Add",
+    "clear": "Clear",
+    "dl": "Download all",
+    "ready": "Ready to download",
+    "cnt": "Queue: {n} | Pending: {p}",
+    "doing": "Downloading...",
+    "conv": "Converting...",
+    "done": "Completed: {ok} OK, {err} errors",
+    "dedi": "PARA LUCIAN (SERPU)",
 }
 
 TXT = '#e6e6e6'
@@ -91,54 +46,23 @@ def rgba(h):
             int(h[4:6], 16) / 255.0, 1)
 
 
-def get_dl_dir():
-    if not IS_ANDROID:
-        d = os.path.expanduser('~/Downloads/MP3')
-        try:
-            os.makedirs(d, exist_ok=True)
-        except Exception:
-            d = os.path.expanduser('~/Downloads')
-        return d
-
-    for d in ['/storage/emulated/0/Download/MP3',
-              '/sdcard/Download/MP3']:
-        try:
-            os.makedirs(d, exist_ok=True)
-            return d
-        except Exception:
-            continue
-
-    try:
-        from jnius import autoclass
-        act = autoclass('org.kivy.android.PythonActivity')
-        ctx = act.mActivity
-        d = os.path.join(str(ctx.getFilesDir()), 'MP3')
-        os.makedirs(d, exist_ok=True)
-        return d
-    except Exception:
-        pass
-
-    return os.getcwd()
-
-
 class YtMp3App(App):
     def build(self):
-        self.t = T[get_lang()]
-        self.title = self.t["title"]
+        self.title = T["title"]
         self.downloading = False
         self.queue = []
-        self.dl_dir = get_dl_dir()
+        self.dl_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
 
         r = BoxLayout(orientation='vertical', padding=12, spacing=8)
 
-        r.add_widget(Label(text=self.t["title"], font_size='20sp',
+        r.add_widget(Label(text=T["title"], font_size='20sp',
                            bold=True, color=rgba(RED),
                            size_hint_y=None, height=40))
-        r.add_widget(Label(text=self.t["sub"], font_size='12sp',
+        r.add_widget(Label(text=T["sub"], font_size='12sp',
                            color=rgba(SUB), size_hint_y=None, height=24))
 
         self.inp = TextInput(
-            hint_text=self.t["ph"], multiline=True,
+            hint_text=T["ph"], multiline=True,
             size_hint_y=None, height=100,
             background_color=rgba(SURF), foreground_color=rgba(TXT),
             hint_foreground_color=rgba(SUB), cursor_color=rgba(BLU),
@@ -146,11 +70,11 @@ class YtMp3App(App):
         r.add_widget(self.inp)
 
         br = BoxLayout(spacing=8, size_hint_y=None, height=44)
-        self.b_add = Button(text=self.t["add"], background_color=rgba(BLU),
+        self.b_add = Button(text=T["add"], background_color=rgba(BLU),
                             color=(0, 0, 0, 1), bold=True, font_size='13sp')
         self.b_add.bind(on_press=self._add)
         br.add_widget(self.b_add)
-        self.b_clr = Button(text=self.t["clear"], background_color=rgba(RED),
+        self.b_clr = Button(text=T["clear"], background_color=rgba(RED),
                             color=(0, 0, 0, 1), bold=True, font_size='13sp')
         self.b_clr.bind(on_press=self._clr)
         br.add_widget(self.b_clr)
@@ -163,7 +87,7 @@ class YtMp3App(App):
         sv.add_widget(self.qbox)
         r.add_widget(sv)
 
-        self.cnt = Label(text=self.t["cnt"].format(n=0, p=0),
+        self.cnt = Label(text=T["cnt"].format(n=0, p=0),
                          font_size='11sp', color=rgba(SUB),
                          size_hint_y=None, height=22)
         r.add_widget(self.cnt)
@@ -172,18 +96,18 @@ class YtMp3App(App):
                                 size_hint_y=None, height=16)
         r.add_widget(self.prog)
 
-        self.stat = Label(text=self.t["ready"], font_size='12sp',
+        self.stat = Label(text=T["ready"], font_size='12sp',
                           color=rgba(SUB), size_hint_y=None, height=24)
         r.add_widget(self.stat)
 
         dr = BoxLayout(spacing=8, size_hint_y=None, height=44)
-        self.b_dl = Button(text=self.t["dl"], background_color=rgba(GRN),
+        self.b_dl = Button(text=T["dl"], background_color=rgba(GRN),
                            color=(0, 0, 0, 1), bold=True, font_size='13sp')
         self.b_dl.bind(on_press=self._go)
         dr.add_widget(self.b_dl)
         r.add_widget(dr)
 
-        r.add_widget(Label(text=self.t["dedi"], font_size='13sp',
+        r.add_widget(Label(text=T["dedi"], font_size='13sp',
                            bold=True, color=rgba(NEO),
                            size_hint_y=None, height=28))
         return r
@@ -195,7 +119,7 @@ class YtMp3App(App):
         urls = [l.strip() for l in text.split('\n')
                 if re.search(r'(youtube\.com|youtu\.be)', l.strip())]
         if not urls:
-            self.stat.text = "No valid links"
+            self.stat.text = "No valid YouTube links"
             self.stat.color = rgba(RED)
             return
         for u in urls:
@@ -217,7 +141,7 @@ class YtMp3App(App):
     def _upd(self):
         n = len(self.queue)
         p = sum(1 for q in self.queue if q['st'] == 'pending')
-        self.cnt.text = self.t["cnt"].format(n=n, p=p)
+        self.cnt.text = T["cnt"].format(n=n, p=p)
 
     def _go(self, *args):
         if self.downloading or not any(
@@ -244,7 +168,7 @@ class YtMp3App(App):
         for i, item in enumerate(pending):
             item['st'] = 'doing'
             Clock.schedule_once(
-                lambda dt: self._sts(self.t["doing"]), 0)
+                lambda dt: self._sts(T["doing"]), 0)
 
             def hook(d, idx=i):
                 if d['status'] == 'downloading':
@@ -256,7 +180,7 @@ class YtMp3App(App):
                             self._prg(v), 0)
                 elif d['status'] == 'finished':
                     Clock.schedule_once(
-                        lambda dt: self._sts(self.t["conv"]), 0)
+                        lambda dt: self._sts(T["conv"]), 0)
 
             opts = {
                 'format': 'bestaudio/best',
@@ -302,7 +226,7 @@ class YtMp3App(App):
         self.b_add.disabled = False
         self.b_clr.disabled = False
         self.prog.value = 100
-        self.stat.text = self.t["done"].format(ok=ok, err=err)
+        self.stat.text = T["done"].format(ok=ok, err=err)
         self.stat.color = rgba(GRN)
         self._upd()
 
